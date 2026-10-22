@@ -1,0 +1,22 @@
+import {recipeTime} from './cooking-guide.js';
+import {ingredientPages,catalog} from './catalog.js';
+export {ingredientPages};
+export const ingredients=ingredientPages.flatMap(p=>p.items);
+export const tools=['电煮锅','炒锅','电饭煲','微波炉','空气炸锅','免开火'];
+export const seasonings=['盐','酱油','油','醋','糖','胡椒'];
+export const recipes=catalog.map(r=>({...r,tools:r.tools[0]==='电煮锅'?[...r.tools,'炒锅']:r.tools}));
+const names=ingredients.map(([,name])=>name).sort((a,b)=>b.length-a.length);
+export function canonical(text){return String(text).replace(/西红柿|圣女果/g,'番茄').replace(/熟米饭|剩米饭|剩饭|熟饭/g,'米饭').replace(/面条|面饼/g,'挂面').replace(/马铃薯/g,'土豆').replace(/胡罗卜/g,'胡萝卜').replace(/西蓝花/g,'西兰花').replace(/花菜/g,'菜花').replace(/上海青|青江菜|油麦菜/g,'青菜').replace(/大白菜|小白菜/g,'白菜').replace(/口蘑|白玉菇/g,'蘑菇').replace(/金针菌/g,'金针菇').replace(/鸡脯肉|鸡胸(?!肉)/g,'鸡胸肉').replace(/肉末|肉沫/g,'猪肉末').replace(/猪猪肉末/g,'猪肉末').replace(/干豆腐|香干/g,'豆干').replace(/通心粉|意大利面/g,'意面').replace(/切片面包|面包片|面包/g,'吐司').replace(/奶酪|起司/g,'芝士').replace(/酸奶(?!油)/g,'原味酸奶').replace(/原味原味酸奶/g,'原味酸奶').replace(/火腿(?!肠)/g,'火腿肠').replace(/大蒜/g,'蒜')}
+export function getKnownFoods(inputs){const found=[];for(const text of inputs||[]){let value=canonical(text);for(const name of names)if(value.includes(name)){found.push(name);value=value.split(name).join('')}}return [...new Set(found)]}
+const complexAllergy=/过敏|花生|坚果|海鲜|乳制|麸质|小麦|大豆/;
+function matching(input,ignoreTime=false){if(complexAllergy.test(input.avoid||''))return [];const excluded=getKnownFoods([input.avoid||'']);const fs=getKnownFoods(input.foods).filter(f=>!excluded.includes(f));return recipes.filter(r=>r.foods.every(f=>fs.includes(f))&&r.tools.some(t=>input.tools.includes(t))&&r.seasonings.every(s=>input.seasonings.includes(s))&&(ignoreTime||recipeTime(r,input.servings)<=input.time)).map(r=>({...r,tools:[r.tools.find(t=>input.tools.includes(t))],source:'offline',servings:input.servings,baseTime:r.time,time:recipeTime(r,input.servings)}))}
+export function recommend(input){const pool=matching(input),picked=[],kindCount=new Map(),toolCount=new Map();const priority=getKnownFoods([input.priority||'']);
+const score=r=>(priority.some(f=>r.foods.includes(f))?25:0)+(r.kind==='汤'?-4:3)+Math.min(r.foods.length,3)*1.3-r.time/90-(kindCount.get(r.kind)||0)*4-(toolCount.get(r.tools[0])||0)*1.2-picked.filter(p=>p.foods.slice().sort().join('|')===r.foods.slice().sort().join('|')).length*3;
+while(pool.length&&picked.length<12){pool.sort((a,b)=>score(b)-score(a)||a.time-b.time||a.id.localeCompare(b.id));const r=pool.shift();picked.push(r);kindCount.set(r.kind,(kindCount.get(r.kind)||0)+1);toolCount.set(r.tools[0],(toolCount.get(r.tools[0])||0)+1)}return picked}
+export function recommendationStatus(input){const rs=recommend(input),unknown=(input.foods||[]).filter(n=>!getKnownFoods([n]).length);if(complexAllergy.test(input.avoid||''))return {recipes:[],unknown,reason:'本地菜单不能可靠核实复杂过敏条件，请核对配料和标签；你可以只填写明确不吃的食材。',actions:[]};if(rs.length)return {recipes:rs,unknown,reason:'',actions:[]};
+if(!getKnownFoods(input.foods).length)return {recipes:[],unknown,reason:'这些食材暂未收录。可翻页选择已有食材，或查看完整菜单。',actions:[]};
+const longer=matching(input,true).sort((a,b)=>a.time-b.time);if(longer.length){const needed=Math.min(...longer.map(r=>r.time)),next=needed<=30?30:needed<=60?60:90;return {recipes:[],unknown,reason:`当前厨具可做「${longer[0].name}」等，${input.servings||1}人份分批制作约需${needed}分钟。`,actions:needed<=90?[{label:`放宽到 ${next} 分钟`,time:next}]:[]}}
+const options=recipes.filter(r=>r.foods.every(f=>getKnownFoods(input.foods).includes(f))&&!r.foods.some(f=>getKnownFoods([input.avoid||'']).includes(f)));if(options.length){const r=options[0],missingSeason=r.seasonings.filter(s=>!input.seasonings.includes(s));return {recipes:[],unknown,reason:`可以考虑「${r.name}」：需要${r.tools.join('或')}，约${r.time}分钟${missingSeason.length?'，还需勾选你实际有的'+missingSeason.join('、'):''}。请按实际情况调整设置。`,actions:[]}}
+return {recipes:[],unknown,reason:'当前组合暂未收录对应做法。菜谱只用已选食材中的一部分；可以增加一种食材或查看完整菜单。',actions:[]}}
+// Retained pure validator for source compatibility; no model requests are made.
+export function validateAIRecipe(r,input){return Boolean(r&&typeof r.name==='string'&&Array.isArray(r.foods)&&r.foods.length&&r.foods.every(f=>getKnownFoods(input.foods).includes(f))&&Array.isArray(r.tools)&&r.tools.every(t=>input.tools.includes(t))&&Array.isArray(r.seasonings)&&r.seasonings.every(s=>input.seasonings.includes(s))&&Number.isFinite(r.time)&&r.time<=input.time&&r.time>0&&Array.isArray(r.steps)&&r.steps.length>=2&&r.steps.length<=8&&r.steps.every(s=>typeof s==='string'&&s.length<=800))}

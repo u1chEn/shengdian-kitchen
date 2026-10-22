@@ -1,0 +1,18 @@
+{
+  "name": "shengdian-kitchen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "用现有食材找菜谱的纸张拼贴风Demo",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "start:offline": "node server.mjs",
+    "start:ai": "node --env-file=.env server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check public/app.js && node --check public/catalog.js && node --check public/recipes.js && node --check public/cooking-guide.js && node --check public/paper-art.js && node --check server.mjs && node --check worker-api.mjs && node --check model-config.mjs && node --check model-recipes.mjs && node --check public/recipe-request.js && node --check public/ai-client.js && node --check private-key-store.mjs && node --check public/connect.js",
+    "catalog:export": "node scripts/export-catalog.mjs"
+  }
+}

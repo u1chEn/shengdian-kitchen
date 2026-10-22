@@ -1,0 +1,10 @@
+import {writeFile,mkdir} from 'node:fs/promises';
+import {catalog,ingredientPages} from '../public/catalog.js';
+import {recipeText} from '../public/cooking-guide.js';
+const here=new URL('../public/',import.meta.url);
+const intro=`# 剩点什么 · 食材与菜单\n\n${ingredientPages.reduce((s,p)=>s+p.items.length,0)} 种食材，${catalog.length} 道内置菜谱。以下为1人份参考，网页会按1–3人换算。每道菜可作为一餐中的一道菜，按存量和搭配减少用量；不是完整营养餐的统一标准。烹饪时间与温度未经逐道实测，请检查实际熟度。\n\n`;
+const pages=ingredientPages.map((p,i)=>`## 冰箱第${i+1}页 · ${p.title}\n\n${p.items.map(x=>x[1]).join('、')}\n`).join('\n');
+const menus=catalog.map(r=>`## ${r.name}\n\n${recipeText(r,1)}\n`).join('\n');
+await writeFile(new URL('menu-list.md',here),intro+pages+'\n# 完整菜谱\n\n'+menus);
+await writeFile(new URL('recipe-catalog.json',here),JSON.stringify({schemaVersion:1,baseServings:1,ingredientPages,recipes:catalog},null,2)+'\n');
+console.log(`Exported ${catalog.length} recipes to menu-list.md and recipe-catalog.json`);
